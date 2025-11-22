@@ -1,0 +1,132 @@
+/* Mail-Bot custom styles to match project layout */
+:root{
+  --bg: #f5f5f5;
+  --card-bg: #ffffff;
+  --muted: #777;
+  --container-w: 1100px;
+  --accent: #5b8cff;
+  --accent-2: #8fb1ff;
+  --accent-3: #3a6bff;
+  --card-shadow: 0 12px 36px rgba(58,107,255,0.10);
+  --panel-max-height: calc(100vh - 100px);
+}
+/* Reset and focused layout to match pjt_layout.jpg */
+.app-root { min-height:100vh; padding:0; background: radial-gradient(1200px 600px at 10% 10%, rgba(91,140,255,0.06), transparent 10%), radial-gradient(900px 420px at 90% 90%, rgba(143,177,255,0.04), transparent 12%), linear-gradient(180deg, #f6fbff 0%, #eef6ff 100%); }
+/* make layout fully contained: no body scrollbars; inner columns handle scrolling */
+html, body, #root { height: 100%; overflow-x: hidden; overflow-y: hidden; }
+*, *::before, *::after { box-sizing: border-box; }
+body { margin:0; font-family: Inter, Arial, Helvetica, sans-serif; background: transparent; color:#0b1220; }
+.app-root{ min-height:100vh; padding:0; background: radial-gradient(1200px 600px at 10% 10%, rgba(91,140,255,0.06), transparent 10%), radial-gradient(900px 420px at 90% 90%, rgba(143,177,255,0.04), transparent 12%), linear-gradient(180deg, #f6fbff 0%, #eef6ff 100%); }
+.centered{ display:flex; align-items:center; justify-content:center; }
+.container{ width:100%; max-width:none; margin:0; padding:0 18px; }
+.topbar{ position:relative; display:flex; align-items:center; padding:18px 12px; margin-bottom:0; height:72px; }
+.brand{ font-size:30px; font-weight:800; margin:0 auto; display:inline-block; color:var(--accent); }
+.top-buttons{ position:absolute; right:18px; top:18px; display:flex; gap:8px; }
+.btn{ padding:8px 12px; border-radius:8px; cursor:pointer; font-size:13px; transition:all .12s ease; background: linear-gradient(90deg,var(--accent),var(--accent-2)); color: #fff; border: none; box-shadow: 0 10px 30px rgba(58,107,255,0.10); }
+.btn:hover{ transform:translateY(-1px); box-shadow: 0 16px 40px rgba(58,107,255,0.12); }
+.btn.primary{ background: linear-gradient(90deg,var(--accent-3),var(--accent)); color:white; border: none; box-shadow: 0 14px 40px rgba(58,107,255,0.14); }
+
+/* Two column layout: left narrow inbox, right large summary */
+.columns{ display:grid; grid-template-columns: 300px 1fr 380px; gap:24px; align-items:start; width:100%; height: var(--panel-max-height); }
+.message-column{ padding:12px 6px; }
+.right-column{ display:flex; flex-direction:column; }
+.chat-card{ padding:12px; }
+.card{ background:var(--card-bg); border-radius:12px; padding:18px; box-shadow: var(--card-shadow); border: 1px solid rgba(91,140,255,0.04); display:flex; flex-direction:column; max-width:100%; }
+.small-card{ max-width:420px; }
+.card-title{ margin:0 0 10px 0; font-size:18px; }
+
+/* Inbox list */
+.inbox-card{ display:flex; flex-direction:column; height:var(--panel-max-height); }
+.inbox-list{ flex:1 1 auto; overflow-y:auto; overflow-x:hidden; padding-right:8px; max-height: calc(var(--panel-max-height) - 80px); }
+/* Ensure inbox items wrap and don't force horizontal scroll */
+.inbox-item, .inbox-item * { white-space: normal; word-break: break-word; }
+.inbox-item{ padding:10px 8px; border-bottom:1px solid #eee; cursor:pointer; text-align:left; }
+.inbox-item:last-child{ border-bottom: none; }
+.inbox-item.selected{ background:#fafafa; box-shadow: 0 12px 36px rgba(58,107,255,0.12); transform: translateY(-3px); }
+.subject{ font-weight:700; font-size:14px; margin-bottom:4px; }
+.from{ font-size:12px; color:#666; margin-bottom:6px; }
+.snippet{ font-size:13px; color:#333; line-height:1.15; }
+
+/* Summary panel */
+.summary-card{ padding:16px; overflow:auto; }
+.muted{ color:#777; }
+.error{ color:#d32f2f; }
+.section{ margin-bottom:14px; }
+.draft-box{ margin:10px 0; padding:12px; background:#fbfbfb; border-radius:6px; border:1px solid #f0f0f0; }
+
+/* Actions card sits below summary and above chat - tight spacing */
+.actions-card{ padding:12px; margin-top:6px; }
+
+/* Category badge like in pjt_layout.jpg */
+.category-block{ margin-bottom:14px; }
+.category-badge{ display:inline-block; padding:8px 14px; border-radius:20px; color:#fff; font-weight:700; font-size:13px; box-shadow: 0 1px 0 rgba(0,0,0,0.06); }
+.category-badge.newsletter{ background:#2b8ef6; }
+.category-badge.important{ background:#d64545; }
+.category-badge.spam{ background:#8a8a8a; }
+.category-badge.todo{ background:#2e8b57; }
+
+/* Message body constraints to avoid overflowing layout */
+.message-body{
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow:auto;
+  flex:1 1 auto;
+  background: #ffffff;
+  border-radius:8px;
+  padding:12px;
+  border: 1px solid #eee;
+}
+
+/* inner wrapper for message column so header stays fixed and body scrolls */
+.message-inner{ display:flex; flex-direction:column; height:100%; }
+
+/* Actions card sits below summary and above chat - tight spacing */
+.actions-card{ padding:12px; margin-top:6px; }
+
+/* Focus styles: remove default black outline and use accent glow */
+input:focus, textarea:focus, .btn:focus {
+  outline: none;
+  box-shadow: 0 6px 18px rgba(91,140,255,0.12);
+  border-color: rgba(91,140,255,0.6);
+}
+
+/* Tweak chat input look */
+input[type="text"]{ border:1px solid rgba(10,20,40,0.06); padding:8px; border-radius:6px; background: #fff; color: #0b1220 }
+input[type="text"]:focus{ box-shadow: 0 8px 30px rgba(58,107,255,0.12); border-color: var(--accent); }
+
+/* subtle hover for inbox items */
+.inbox-item{ transition: transform 150ms ease, box-shadow 150ms ease, background 120ms ease; }
+.inbox-item:hover{ background: linear-gradient(90deg,#ffffff,#fbfdff); box-shadow: 0 14px 40px rgba(58,107,255,0.12); transform: translateY(-4px); }
+
+.right-column { height:var(--panel-max-height); }
+.right-column .chat-card { overflow:auto; }
+.chat-card{ display:flex; flex-direction:column; }
+
+.chat-messages{ border:1px solid #eee; padding:10px; border-radius:6px; min-height:120px; max-height: calc(var(--panel-max-height) - 260px); overflow:auto; background:#fff; }
+.chat-input-row{ display:flex; gap:8px; margin-top:8px; align-items:center; }
+.chat-input-row input{ flex:1 1 auto; padding:8px; border-radius:6px; border:1px solid rgba(10,20,40,0.06); }
+
+.draft-box{ margin:10px 0; padding:12px; background:#fbfbfb; border-radius:6px; border:1px solid #f0f0f0; max-height:220px; overflow:auto; }
+
+.draft-preview-container{ margin-top:12px; }
+
+/* Ensure the center message card fills available vertical space and its content scrolls internally */
+.message-column { height:var(--panel-max-height); }
+.message-column .card { height:100%; display:flex; flex-direction:column; }
+.message-column .message-body { flex:1 1 auto; max-height: calc(var(--panel-max-height) - 80px); overflow:auto; }
+
+/* ensure no horizontal overflow from padding/gaps */
+.container { padding-left:18px; padding-right:18px; }
+@media (min-width: 1200px) { .container { padding-left: 36px; padding-right:36px; } }
+
+/* (removed duplicate center-fill rules - message column rules defined above) */
+
+/* Make sure top-level inbox card matches the center and right column heights */
+.inbox-card.card { height:var(--panel-max-height); }
+
+/* scrollbar minor styling for webkit */
+.inbox-list::-webkit-scrollbar{ width:10px; }
+.inbox-list::-webkit-scrollbar-thumb{ background:#e0e0e0; border-radius:6px; }
+
+/* responsive */
+@media(max-width:900px){ .columns{ grid-template-columns: 1fr; } .topbar{ flex-direction:column; align-items:flex-start; gap:12px } }

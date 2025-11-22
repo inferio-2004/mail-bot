@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Inbox AI Assistant - Prototype</title>
+</head>
+<body>
+  <h1>Inbox AI Assistant — Prototype</h1>
+  <p>This prototype demonstrates Google OAuth sign-in and saving a draft to Gmail.</p>
+
+  <div id="status">
+    <button id="connect">Connect Gmail</button>
+    <button id="profile">Show Profile (requires signed in)</button>
+    <button id="saveDraft">Save Draft to Gmail (requires signed in)</button>
+    <button id="logout">Logout</button>
+  </div>
+
+  <pre id="output"></pre>
+
+<script>
+document.getElementById("connect").onclick = () => {
+  window.location.href = "/connect_gmail";
+};
+
+document.getElementById("profile").onclick = async () => {
+  const res = await fetch("/profile");
+  const txt = await res.text();
+  document.getElementById("output").textContent = txt;
+};
+
+document.getElementById("saveDraft").onclick = async () => {
+  const body = {
+    to: prompt("To email (default: your email):") || "",
+    subject: prompt("Subject:", "Test draft from prototype"),
+    body: prompt("Body:", "Hello from prototype.")
+  };
+  const res = await fetch("/save_draft", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(body)
+  });
+  const txt = await res.text();
+  document.getElementById("output").textContent = txt;
+};
+
+document.getElementById("logout").onclick = () => {
+  window.location.href = "/logout";
+};
+</script>
+</body>
+</html>

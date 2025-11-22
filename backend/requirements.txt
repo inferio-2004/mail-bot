@@ -1,0 +1,13 @@
+flask
+flask-cors
+flask-limiter
+requests
+google-genai
+langchain
+langchain-google-genai
+sqlalchemy
+psycopg2-binary
+cryptography
+beautifulsoup4
+python-dotenv
+bs4
