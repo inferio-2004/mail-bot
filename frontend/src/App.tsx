@@ -54,6 +54,7 @@ function App() {
   const [question, setQuestion] = useState('');
   const [draftPreview, setDraftPreview] = useState<{ subject?: string; body?: string } | null>(null);
   const [savedDrafts, setSavedDrafts] = useState<Array<any>>([]);
+  const [draftSavedMessage, setDraftSavedMessage] = useState<string | null>(null);
   const [messageBody, setMessageBody] = useState<string>('');
   const [classification, setClassification] = useState<{
     category?: string;
@@ -341,6 +342,14 @@ function App() {
       const hasSummary = !!(cached && cached.parsed && cached.parsed.summary);
       const hasCategory = !!(cachedCls && cachedCls.category);
       if (hasSummary && hasCategory) {
+        // fully cached: ensure spam local action is present when classification indicates spam
+        const clsCatCached = (cachedCls && cachedCls.category) || email.category || '';
+        const isSpamCached = typeof clsCatCached === 'string' && clsCatCached.toLowerCase().includes('spam');
+        if (isSpamCached) {
+          console.debug('handleSummarize: cached message detected as spam; enforcing local spam action before early return');
+          if (!cached.parsed) cached.parsed = {};
+          cached.parsed.actions = [{ task: "Ignore this email — it's spam", deadline: undefined, meta: {} }];
+        }
         // fully cached: show and return
         setSummary(cached);
         setClassification(cachedCls || null);
@@ -410,9 +419,17 @@ function App() {
         } else {
           console.debug('handleSummarize: using only cached data, no API calls needed for sum/cls');
         }
-        // Always fetch actions
-        console.debug('handleSummarize: always calling actions');
-        promises.push(fetch(`${API_BASE}/llm/actions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ message_id: email.id }) }));
+        // Fetch actions unless this message is already classified as spam
+        // Determine spam using the cached classification first (don't rely on async setState).
+        const clsCat = (cachedCls && cachedCls.category) || (classification && classification.category) || email.category || '';
+        const isSpam = typeof clsCat === 'string' && clsCat.toLowerCase().includes('spam');
+        console.log('handleSummarize: isSpam=', isSpam);
+        if (!isSpam) {
+          console.debug('handleSummarize: calling actions (non-spam)');
+          promises.push(fetch(`${API_BASE}/llm/actions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ message_id: email.id }) }));
+        } else {
+          console.debug('handleSummarize: skipping actions call for spam message');
+        }
         const results = await Promise.all(promises);
         if (needSummarize && needClassify) {
           sumRes = results[0];
@@ -476,14 +493,34 @@ function App() {
       }
       if (actRes) {
         try { actData = await actRes.json(); console.debug('handleSummarize: actions response=', actData); } catch(e) { console.debug('handleSummarize: actions parse error', e); }
+      } else {
+        // If we skipped calling actions because the mail is spam, provide a local recommended action
+        const clsCat2 = (cachedCls && cachedCls.category) || (classification && classification.category) || email.category || '';
+        const isSpam2 = typeof clsCat2 === 'string' && clsCat2.toLowerCase().includes('spam');
+        if (isSpam2) {
+          actData = { parsed: { actions: [{ task: "Ignore this email — it's spam", deadline: undefined, meta: {} }] } };
+          console.debug('handleSummarize: provided local spam action=', actData);
+        }
       }
       // Merge actions into summary parsed if not already there
       if (actData && actData.parsed && actData.parsed.actions) {
-        if (sumData && !sumData.parsed) sumData.parsed = {};
-        if (sumData && sumData.parsed) {
+        if (!sumData) {
+          sumData = { parsed: { actions: actData.parsed.actions } } as any;
+          console.debug('handleSummarize: created summary to hold actions for spam/message without summary=', sumData);
+        } else {
+          if (!sumData.parsed) sumData.parsed = {};
           sumData.parsed.actions = actData.parsed.actions;
           console.debug('handleSummarize: merged actions into summary=', sumData);
         }
+      }
+      // If the message is spam, override any actions with the single local spam action to avoid backend suggestions
+      const finalClsCat = (cachedCls && cachedCls.category) || (classification && classification.category) || email.category || '';
+      const finalIsSpam = typeof finalClsCat === 'string' && finalClsCat.toLowerCase().includes('spam');
+      if (finalIsSpam) {
+        if (!sumData) sumData = { parsed: {} } as any;
+        if (!sumData.parsed) sumData.parsed = {};
+        sumData.parsed.actions = [{ task: "Ignore this email — it's spam", deadline: undefined, meta: {} }];
+        console.debug('handleSummarize: enforced local spam action in summary.parsed.actions');
       }
       console.debug('handleSummarize: final sumData=', sumData);
       // Normalize summary parsed output: if parsed.summary missing, try to parse llm_text or fall back to llm_text as summary
@@ -614,10 +651,15 @@ function App() {
         setSavedDrafts((s) => [...s, data]);
         // clear preview after save
         setDraftPreview(null);
+        // show a brief confirmation message and keep saved drafts visible
+        setDraftSavedMessage('Draft saved');
+        setTimeout(() => setDraftSavedMessage(null), 3000);
       } else {
         // treat response as saved item
         setSavedDrafts((s) => [...s, data]);
         setDraftPreview(null);
+        setDraftSavedMessage('Draft saved');
+        setTimeout(() => setDraftSavedMessage(null), 3000);
       }
     } catch (e) {
       console.error('save draft failed', e);
@@ -842,6 +884,10 @@ function App() {
                     <button className="btn primary" onClick={handleSaveDraft}>Save Draft</button>
                   </div>
                 </div>
+              )}
+              {/* Saved Drafts list and transient confirmation */}
+              {draftSavedMessage && (
+                <div style={{ marginTop: 8, color: '#157f3a', fontWeight: 600 }}>{draftSavedMessage}</div>
               )}
             </div>
             )}

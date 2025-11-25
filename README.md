@@ -37,12 +37,13 @@ A small prototype that augments Gmail with LLM-powered summaries, action extract
 - `FLASK_SECRET` — Flask session secret
 
 **Session & Persistent Login**
-- The app uses standard Flask cookie sessions for SPA authentication. Sessions are set as "permanent" with a 30-day lifetime via `app.permanent_session_lifetime` so the browser session cookie persists across restarts.
-- We intentionally avoid storing session state in a database by default — the session cookie is the primary mechanism. If you need server-side session storage, enable a session backend (e.g., Redis) and update `app.py` accordingly.
+ The app uses standard Flask cookie sessions for SPA authentication. The backend sets `session.permanent = True` and `app.permanent_session_lifetime` to 30 days so the browser session cookie is long-lived and the user remains signed in across browser restarts.
+ We do not persist session state to a filesystem or DB by default — the session cookie remains the primary mechanism. (During earlier experimentation a filesystem session store was briefly used; that has been removed in favor of the simpler cookie flow.)
+ If you prefer server-side session storage for production (Redis, database), enable a secure session backend and configure `SESSION_COOKIE_SECURE=True` and an appropriate `SESSION_COOKIE_DOMAIN` in `app.py` for your deployment.
 
-Quick way to generate a Fernet key (PowerShell):
-```powershell
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+ The AI summary is shown in the Summary panel and now includes the LLM-provided **category badge and reason** displayed above the summary text.
+ Saving a custom prompt now re-fetches the prompts from the server so the DB is the canonical source of truth (the Settings UI reflects saved values immediately).
+ The per-item classification badge remains visible in the Inbox list.
 ```
 
 **Run Locally (Windows PowerShell)**

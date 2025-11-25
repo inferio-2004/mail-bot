@@ -22,8 +22,6 @@ REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI", "http://127.0.0.1:5000/oaut
 FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://127.0.0.1:3000")
 
 # Flask app
-CORS(app, origins=FRONTEND_ORIGIN, supports_credentials=True)
-# Flask app
 app = Flask(__name__)
 # make cookies usable during local dev OAuth redirect
 app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret-change-me")
