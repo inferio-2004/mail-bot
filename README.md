@@ -158,7 +158,6 @@ https://accounts.google.com/o/oauth2/v2/auth?client_id=YOUR_CLIENT_ID&redirect_u
 Replace `YOUR_CLIENT_ID` and `YOUR_REDIRECT_URI`.
 
 ## Notes & Next steps
-- This prototype stores tokens in a local file for simplicity. In production, store encrypted tokens in a secure DB.
 - Implement token refresh (exchange refresh_token for new access_token when expired).
 - Add proper error handling and logging.
 - When moving to production, request OAuth verification for Gmail scopes so non-test users can connect.
