@@ -36,6 +36,10 @@ A small prototype that augments Gmail with LLM-powered summaries, action extract
 - `DATABASE_URL` — SQLAlchemy DB URL (default in code uses Postgres placeholder)
 - `FLASK_SECRET` — Flask session secret
 
+**Session & Persistent Login**
+- The app uses standard Flask cookie sessions for SPA authentication. Sessions are set as "permanent" with a 30-day lifetime via `app.permanent_session_lifetime` so the browser session cookie persists across restarts.
+- We intentionally avoid storing session state in a database by default — the session cookie is the primary mechanism. If you need server-side session storage, enable a session backend (e.g., Redis) and update `app.py` accordingly.
+
 Quick way to generate a Fernet key (PowerShell):
 ```powershell
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"

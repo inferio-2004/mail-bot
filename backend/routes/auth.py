@@ -45,4 +45,9 @@ def dev_login():
         # ignore save failures for dev-only flow
         pass
     session['user_email'] = email
+    # make dev login persistent like the OAuth flow
+    try:
+        session.permanent = True
+    except Exception:
+        pass
     return jsonify({"status": "dev_logged_in", "email": email})

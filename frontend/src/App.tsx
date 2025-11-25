@@ -140,6 +140,8 @@ function App() {
           if (data.email) {
             setUser(data);
             loadEmails();
+            // load user-custom prompts at startup so prompts are available to LLM worker
+            loadCustomPrompts();
           }
         })
         .catch(() => {
@@ -148,17 +150,23 @@ function App() {
         });
       window.history.replaceState(null, '', window.location.pathname);
     } else {
-      // Check for persistent session or stored credentials
+      // Check for persistent session via session cookie
       fetch(`${API_BASE}/user/session`, { credentials: 'include' })
-        .then(res => res.json())
-        .then(data => {
-          if (data.email) {
-            setUser(data);
-            loadEmails();
+        .then(res => {
+          if (res.ok) {
+            return res.json().then(data => {
+              if (data.email) {
+                setUser(data);
+                loadEmails();
+                // ensure custom prompts are loaded on app open
+                loadCustomPrompts();
+              }
+            });
           }
+          // 401 or other error means not authenticated; do nothing
         })
         .catch(() => {
-          // Not authenticated
+          // Network error; not authenticated
         });
     }
   }, []);
@@ -267,8 +275,12 @@ function App() {
       });
       const data = await res.json();
       if (data.status === 'saved') {
-        setCustomPrompts(prev => ({ ...prev, [promptType]: prompt }));
+        // Re-fetch prompts from server to ensure DB is canonical source of truth
+        await loadCustomPrompts();
         alert(`${promptType} prompt saved successfully!`);
+      } else {
+        console.error('save prompt returned unexpected:', data);
+        alert('Failed to save prompt');
       }
     } catch (e) {
       console.error('Failed to save prompt:', e);
@@ -664,7 +676,7 @@ function App() {
             )}
             <button className="btn" onClick={() => {
               setUser(null);
-              // Optionally clear session on backend
+              // Clear session on backend
               fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
             }} title="Log out">Log out</button>
           </div>
@@ -748,7 +760,20 @@ function App() {
               <p className="error">Error: {summary.error}</p>
             ) : summary ? (
               <div>
-                {/* Classification tag removed from summary panel per user preference */}
+                {/* Show classification (category + reason) under the summary */}
+                <div className="category-block">
+                  {(() => {
+                    const cat = (classification && classification.category) || selectedEmail.category || 'Uncategorized';
+                    const reason = (classification && classification.reason) || selectedEmail.category_reason || '';
+                    const cls = (cat || '').toString().toLowerCase().replace(/\s+/g, '-');
+                    return (
+                      <>
+                        <span className={`category-badge ${cls}`}>{cat}</span>
+                        {reason && <div style={{ marginTop: 8, color: '#666', fontSize: 13 }}>{reason}</div>}
+                      </>
+                    );
+                  })()}
+                </div>
                 {summary.parsed?.summary && (
                   <div className="section">
                     <p>{summary.parsed.summary}</p>

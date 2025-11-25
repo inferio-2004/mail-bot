@@ -22,15 +22,21 @@ REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI", "http://127.0.0.1:5000/oaut
 FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://127.0.0.1:3000")
 
 # Flask app
+CORS(app, origins=FRONTEND_ORIGIN, supports_credentials=True)
+# Flask app
 app = Flask(__name__)
 # make cookies usable during local dev OAuth redirect
 app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret-change-me")
 app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",   # allows top-level GET redirect cookies during OAuth
     SESSION_COOKIE_SECURE=False,     # must be False for http://localhost (True requires https)
-    SESSION_COOKIE_DOMAIN="127.0.0.1"
+    SESSION_COOKIE_DOMAIN=None       # let browser use default domain (localhost)
 )
 CORS(app, origins=FRONTEND_ORIGIN, supports_credentials=True)
+# Make Flask sessions persistent across browser restarts for development
+import datetime as _dt
+app.permanent_session_lifetime = _dt.timedelta(days=30)
+
 # Rate limiter (simple)
 limiter = Limiter(
     app=app,
@@ -56,10 +62,11 @@ def health():
 
 @app.route("/user/session")
 def get_user_session():
-    """Return current user session info"""
+    """Return current user session info from session cookie"""
     user_email = session.get("user_email")
     user_name = session.get("user_name")
     user_picture = session.get("user_picture")
+    print(f"[DEBUG] /user/session called: user_email={user_email}, session.keys={list(session.keys())}")
     if not user_email:
         return jsonify({"error": "not_authenticated"}), 401
     return jsonify({
@@ -130,6 +137,8 @@ def oauth2callback():
     session["user_email"] = email
     session["user_name"] = name
     session["user_picture"] = picture
+    # Make the session persistent so user remains logged in across browser restarts
+    session.permanent = True
     app.logger.info("set session user_email=%s, session keys=%s", email, list(session.keys()))
     # Redirect back to frontend (SPA) with success flag
     frontend_url = os.environ.get("FRONTEND_AFTER_AUTH", FRONTEND_ORIGIN + "/?connected=1")

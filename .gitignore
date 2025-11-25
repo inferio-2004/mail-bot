@@ -1,4 +1,3 @@
-@'
 # Python
 __pycache__/
 *.py[cod]
@@ -17,4 +16,6 @@ dist/
 # Editor
 .vscode/
 *.log
-'@ | Out-File -Encoding UTF8 .gitignore
+
+# Session folder for Flask (if enabled temporarily)
+backend/.flask_session/
