@@ -146,11 +146,18 @@ def get_message_body():
             return jsonify({'body': data.get('snippet','')})
         text = base64.urlsafe_b64decode(body_b64 + '==').decode('utf-8', errors='ignore')
         # strip html if present
-        if '<html' in text.lower():
+        if '<html' in text.lower() or '<body' in text.lower() or '<head' in text.lower():
             try:
                 from bs4 import BeautifulSoup
                 soup = BeautifulSoup(text, 'html.parser')
+                # Remove script and style elements
+                for script in soup(["script", "style"]):
+                    script.decompose()
+                # Get text
                 text = soup.get_text(separator='\n')
+                # Clean up excessive newlines
+                lines = [line.strip() for line in text.splitlines()]
+                text = '\n'.join(line for line in lines if line)
             except Exception:
                 pass
         return jsonify({'body': text})

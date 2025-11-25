@@ -27,6 +27,15 @@ class UserToken(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
+class UserPrompt(Base):
+    __tablename__ = "user_prompts"
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(256), nullable=False, index=True)
+    prompt_type = Column(String(64), nullable=False)  # "classify", "summarize", "draft", "ask"
+    custom_prompt = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
 def init_db():
     Base.metadata.create_all(bind=engine)
 
@@ -76,6 +85,40 @@ def delete_user_token(email: str):
         if obj:
             session.delete(obj)
             session.commit()
+    finally:
+        session.close()
+
+def get_user_prompt(email: str, prompt_type: str):
+    """Get custom prompt for a user; returns None if not found"""
+    session = SessionLocal()
+    try:
+        obj = session.query(UserPrompt).filter_by(email=email, prompt_type=prompt_type).first()
+        if not obj:
+            return None
+        return {"email": obj.email, "prompt_type": obj.prompt_type, "custom_prompt": obj.custom_prompt}
+    finally:
+        session.close()
+
+def save_user_prompt(email: str, prompt_type: str, custom_prompt: str):
+    """Save or update custom prompt for a user"""
+    session = SessionLocal()
+    try:
+        existing = session.query(UserPrompt).filter_by(email=email, prompt_type=prompt_type).first()
+        if existing:
+            existing.custom_prompt = custom_prompt
+        else:
+            new = UserPrompt(email=email, prompt_type=prompt_type, custom_prompt=custom_prompt)
+            session.add(new)
+        session.commit()
+    finally:
+        session.close()
+
+def get_all_user_prompts(email: str):
+    """Get all custom prompts for a user"""
+    session = SessionLocal()
+    try:
+        objs = session.query(UserPrompt).filter_by(email=email).all()
+        return [{"email": obj.email, "prompt_type": obj.prompt_type, "custom_prompt": obj.custom_prompt} for obj in objs]
     finally:
         session.close()
 

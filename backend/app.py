@@ -12,6 +12,7 @@ from models import save_user_token, get_user_token, refresh_access_token, init_d
 from routes.auth import auth_bp
 from routes.email import email_bp
 from routes.llm import llm_bp
+from routes.prompts import prompts_bp
 from llm_worker import llm_worker_run
 dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env")
 # Load environment
@@ -47,10 +48,31 @@ app.config["LLM"] = GeminiLLM(model_name=os.environ.get("GEMINI_MODEL", "gemini-
 app.register_blueprint(auth_bp)
 app.register_blueprint(email_bp)
 app.register_blueprint(llm_bp)
+app.register_blueprint(prompts_bp)
 
 @app.route("/")
 def health():
     return jsonify({"status":"ok","time": datetime.datetime.utcnow().isoformat()})
+
+@app.route("/user/session")
+def get_user_session():
+    """Return current user session info"""
+    user_email = session.get("user_email")
+    user_name = session.get("user_name")
+    user_picture = session.get("user_picture")
+    if not user_email:
+        return jsonify({"error": "not_authenticated"}), 401
+    return jsonify({
+        "email": user_email,
+        "name": user_name,
+        "picture": user_picture
+    })
+
+@app.route("/auth/logout", methods=["POST"])
+def logout():
+    """Clear user session"""
+    session.clear()
+    return jsonify({"status": "logged_out"})
 
 @app.route("/connect_gmail")
 def connect_gmail():
@@ -101,10 +123,13 @@ def oauth2callback():
     userinfo = uresp.json()
     email = userinfo.get("email")
     name = userinfo.get("name") or userinfo.get("given_name")
+    picture = userinfo.get("picture")  # Google profile picture URL
     # Save tokens securely
     save_user_token(email=email, name=name, token_payload=token_data, scopes=token_data.get("scope"))
     # create session cookie for SPA
     session["user_email"] = email
+    session["user_name"] = name
+    session["user_picture"] = picture
     app.logger.info("set session user_email=%s, session keys=%s", email, list(session.keys()))
     # Redirect back to frontend (SPA) with success flag
     frontend_url = os.environ.get("FRONTEND_AFTER_AUTH", FRONTEND_ORIGIN + "/?connected=1")
