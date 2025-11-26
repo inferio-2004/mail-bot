@@ -63,7 +63,7 @@ class GeminiLLM(BaseLLM, BaseModel):
     Keeps a simple per-instance deque memory (last N turns).
     """
 
-    model_name: str = "gemini-2.5-flash-lite"
+    model_name: str = "gemini-2.5-flash"
     temperature: float = 0.2
     max_output_tokens: int = 1024
     context_window: int = 5  # keep last N turns

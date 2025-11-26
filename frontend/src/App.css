@@ -56,7 +56,7 @@ body { margin:0; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Se
 .draft-box{ margin:10px 0; padding:12px; background: linear-gradient(90deg, #fbfbfb, #f5f5f5); border-radius:6px; border:1px solid #e8e8e8; }
 
 /* Actions card sits below summary and above chat - tight spacing */
-.actions-card{ padding:12px; margin-top:6px; background: linear-gradient(180deg, #ffffff 0%, #fafbff 100%); overflow-y: auto; max-height: 320px; }
+.actions-card{ padding:12px; margin-top:6px; background: linear-gradient(180deg, #ffffff 0%, #fafbff 100%); overflow-y: auto; max-height: 250px; }
 
 /* Category badge like in pjt_layout.jpg */
 .category-block{ margin-bottom:14px; }

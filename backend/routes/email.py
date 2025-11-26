@@ -72,7 +72,7 @@ def read_mail():
 
     q = request.args.get("q", "in:inbox")
     try:
-        max_results = int(request.args.get("max", 10))
+        max_results = int(request.args.get("max", 30))
     except Exception:
         max_results = 10
 

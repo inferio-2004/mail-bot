@@ -176,7 +176,7 @@ function App() {
     console.debug('loadEmails: start');
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/email/read?max=10`, { credentials: 'include' });
+      const res = await fetch(`${API_BASE}/email/read?max=30`, { credentials: 'include' });
       const data = await res.json();
       if (data.messages) {
         // initialize emails - on fresh login, don't use cache; always call LLM for categories
