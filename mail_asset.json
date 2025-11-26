@@ -1,0 +1,154 @@
+{
+  "messages": [
+    {
+      "id": "msg_001",
+      "snippet": "Reminder: Your fee payment is due on 30th November.",
+      "headers": {
+        "From": "accounts@fgs.edu",
+        "To": "hema@fgs.edu",
+        "Subject": "Fee Payment Reminder",
+        "Date": "Mon, 25 Nov 2025 09:12:00 +0530"
+      }
+    },
+    {
+      "id": "msg_002",
+      "snippet": "Black Friday Mega Deals up to 70% OFF!",
+      "headers": {
+        "From": "newsletter@flipkart.com",
+        "To": "hema@fgs.edu",
+        "Subject": "Black Friday Deals Are Live!",
+        "Date": "Sun, 24 Nov 2025 08:20:00 +0530"
+      }
+    },
+    {
+      "id": "msg_003",
+      "snippet": "Can we schedule a call to discuss the Foundation Stage report?",
+      "headers": {
+        "From": "correspondent@fgs.edu",
+        "To": "hema@fgs.edu",
+        "Subject": "Need Discussion on Foundation Stage Updates",
+        "Date": "Sun, 23 Nov 2025 17:40:00 +0530"
+      }
+    },
+    {
+      "id": "msg_004",
+      "snippet": "Your Amazon order has been shipped.",
+      "headers": {
+        "From": "order-update@amazon.in",
+        "To": "hema@fgs.edu",
+        "Subject": "Your Order is On the Way",
+        "Date": "Sat, 22 Nov 2025 13:25:00 +0530"
+      }
+    },
+    {
+      "id": "msg_005",
+      "snippet": "Please share the revised LKG timetable by tomorrow.",
+      "headers": {
+        "From": "principal@fgs.edu",
+        "To": "hema@fgs.edu",
+        "Subject": "Revised LKG Timetable Required",
+        "Date": "Fri, 21 Nov 2025 10:10:00 +0530"
+      }
+    },
+    {
+      "id": "msg_006",
+      "snippet": "Thank you for registering for the Chennai Early Education Summit.",
+      "headers": {
+        "From": "events@educationconclave.in",
+        "To": "hema@fgs.edu",
+        "Subject": "Registration Confirmation – Education Summit 2025",
+        "Date": "Thu, 20 Nov 2025 14:45:00 +0530"
+      }
+    },
+    {
+      "id": "msg_007",
+      "snippet": "Your OTP for login is 472993.",
+      "headers": {
+        "From": "no-reply@icicibank.com",
+        "To": "hema@fgs.edu",
+        "Subject": "Your Secure OTP",
+        "Date": "Thu, 20 Nov 2025 07:55:00 +0530"
+      }
+    },
+    {
+      "id": "msg_008",
+      "snippet": "Could you approve the purchase request for classroom materials?",
+      "headers": {
+        "From": "admin@fgs.edu",
+        "To": "hema@fgs.edu",
+        "Subject": "Approval Needed – Classroom Material Purchase",
+        "Date": "Wed, 19 Nov 2025 16:10:00 +0530"
+      }
+    },
+    {
+      "id": "msg_009",
+      "snippet": "Your monthly subscription invoice is now available.",
+      "headers": {
+        "From": "billing@zoho.com",
+        "To": "hema@fgs.edu",
+        "Subject": "Invoice for Your Subscription",
+        "Date": "Tue, 18 Nov 2025 09:00:00 +0530"
+      }
+    },
+    {
+      "id": "msg_010",
+      "snippet": "Kids are invited to participate in the Navaratri Fancy Dress contest!",
+      "headers": {
+        "From": "events@fgs.edu",
+        "To": "hema@fgs.edu",
+        "Subject": "Navaratri Fancy Dress Contest – Details Inside",
+        "Date": "Tue, 18 Nov 2025 07:40:00 +0530"
+      }
+    },
+    {
+      "id": "msg_011",
+      "snippet": "Your leave request for 29th November is approved.",
+      "headers": {
+        "From": "hr@fgs.edu",
+        "To": "hema@fgs.edu",
+        "Subject": "Leave Request Approved",
+        "Date": "Mon, 17 Nov 2025 12:18:00 +0530"
+      }
+    },
+    {
+      "id": "msg_012",
+      "snippet": "We have credited your cashback reward.",
+      "headers": {
+        "From": "rewards@hdfcbank.com",
+        "To": "hema@fgs.edu",
+        "Subject": "Cashback Reward Credited",
+        "Date": "Mon, 17 Nov 2025 09:50:00 +0530"
+      }
+    },
+    {
+      "id": "msg_013",
+      "snippet": "Please review the attached UKG lesson plan draft.",
+      "headers": {
+        "From": "coordinator@vellore-branch.com",
+        "To": "hema@fgs.edu",
+        "Subject": "UKG Lesson Plan – Review Needed",
+        "Date": "Sun, 16 Nov 2025 15:15:00 +0530"
+      }
+    },
+    {
+      "id": "msg_014",
+      "snippet": "Your device sign-in was blocked due to an unusual attempt.",
+      "headers": {
+        "From": "security-alerts@google.com",
+        "To": "hema@fgs.edu",
+        "Subject": "Security Alert – Unusual Login Attempt",
+        "Date": "Sun, 16 Nov 2025 08:00:00 +0530"
+      }
+    },
+    {
+      "id": "msg_015",
+      "snippet": "We invite your school to join the Inter-School Sports Meet.",
+      "headers": {
+        "From": "sportscommittee@chennaischools.in",
+        "To": "hema@fgs.edu",
+        "Subject": "Invitation – Inter-School Sports Meet 2025",
+        "Date": "Sat, 15 Nov 2025 11:30:00 +0530"
+      }
+    }
+  ]
+}
