@@ -1,6 +1,9 @@
 
 from flask import Blueprint, request, jsonify, session
 from llm_worker import llm_worker_run
+from llm_worker import ask_stream_generator
+from flask import Response, stream_with_context
+from llm_worker import summarize_stream_generator, actions_stream_generator
 
 llm_bp = Blueprint("llm", __name__, url_prefix="/llm")
 
@@ -69,6 +72,48 @@ def ask_email():
         return jsonify({'error': 'message_id and question required'}), 400
     result = llm_worker_run(user_email, 'ask', {'message_id': message_id, 'question': question})
     return jsonify(result)
+
+
+@llm_bp.route('/ask-stream', methods=['POST'])
+def ask_email_stream():
+    """Stream assistant text for a question about an email."""
+    data = request.get_json() or {}
+    user_email = data.get('email') or session.get('user_email')
+    message_id = data.get('message_id')
+    question = data.get('question')
+    if not user_email:
+        return jsonify({'error': 'user_email required'}), 400
+    if not message_id or not question:
+        return jsonify({'error': 'message_id and question required'}), 400
+
+    gen = ask_stream_generator(user_email, message_id, question)
+    return Response(stream_with_context(gen), mimetype='text/plain')
+
+
+@llm_bp.route('/summarize-stream', methods=['POST'])
+def summarize_email_stream():
+    data = request.get_json() or {}
+    user_email = data.get('email') or session.get('user_email')
+    message_id = data.get('message_id')
+    if not user_email:
+        return jsonify({'error': 'user_email required'}), 400
+    if not message_id:
+        return jsonify({'error': 'message_id required'}), 400
+    gen = summarize_stream_generator(user_email, message_id)
+    return Response(stream_with_context(gen), mimetype='text/plain')
+
+
+@llm_bp.route('/actions-stream', methods=['POST'])
+def actions_email_stream():
+    data = request.get_json() or {}
+    user_email = data.get('email') or session.get('user_email')
+    message_id = data.get('message_id')
+    if not user_email:
+        return jsonify({'error': 'user_email required'}), 400
+    if not message_id:
+        return jsonify({'error': 'message_id required'}), 400
+    gen = actions_stream_generator(user_email, message_id)
+    return Response(stream_with_context(gen), mimetype='text/plain')
 
 
 @llm_bp.route('/actions', methods=['POST'])

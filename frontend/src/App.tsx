@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 
-const API_BASE = 'http://127.0.0.1:5000';
+const API_BASE = process.env.API_BASE || 'http://127.0.0.1:5000';
 
 interface Email {
   id: string;
@@ -63,6 +63,7 @@ function App() {
   } | null>(null);
   const [summarizing, setSummarizing] = useState(false);
   const [classifying, setClassifying] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
   const [showSettings, setShowSettings] = useState(false);
   const [customPrompts, setCustomPrompts] = useState<{ [key: string]: string }>({});
@@ -84,6 +85,9 @@ function App() {
   const saveCache = (c: any, userEmail?: string) => {
     try { localStorage.setItem(getCacheKey(userEmail), JSON.stringify(c)); } catch (e) { /* ignore */ }
   };
+  const clearCache = (userEmail?: string) => {
+    try { localStorage.removeItem(getCacheKey(userEmail)); } catch (e) { /* ignore */ }
+  };
   // Try to safely parse JSON returned from the LLM (which may be wrapped in markdown)
   const tryParseJson = (text?: string) => {
     if (!text || typeof text !== 'string') return null;
@@ -101,6 +105,19 @@ function App() {
         return null;
       }
     }
+  };
+
+  // Normalize categories returned by LLM into a consistent set used by the UI
+  const normalizeCategory = (cat?: string | null) => {
+    if (!cat || typeof cat !== 'string') return 'Uncategorized';
+    const s = cat.trim().toLowerCase();
+    if (!s) return 'Uncategorized';
+    if (s.includes('todo') || s === 'to do' || s === 'to-do') return 'To-Do';
+    if (s.includes('newsletter')) return 'Newsletter';
+    if (s.includes('spam')) return 'Spam';
+    if (s.includes('important')) return 'Important';
+    // fallback: capitalize words
+    return s.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
   };
 
   // Note: classification must come from LLM only; no client-side heuristics here.
@@ -175,6 +192,10 @@ function App() {
   const loadEmails = async () => {
     console.debug('loadEmails: start');
     setLoading(true);
+    setRefreshing(true);
+    
+    // Clear cache on refresh
+    clearCache(user?.email);
     try {
       const res = await fetch(`${API_BASE}/email/read?max=30`, { credentials: 'include' });
       const data = await res.json();
@@ -216,7 +237,8 @@ function App() {
             const enriched = msgs.map(m => {
               const entry = parsed[m.id] || parsed[m.id.toString()] || null;
               console.debug(`loadEmails: for email ${m.id}, entry=${JSON.stringify(entry)}`);
-              const category = (entry && entry.category) || 'Uncategorized';
+              const rawCat = (entry && entry.category) || '';
+              const category = normalizeCategory(rawCat) || 'Important'; // fallback to Important if empty
               const reason = (entry && entry.reason) || 'LLM did not provide a reason';
               // persist classification in cache (per-user) on first load
               try { setCachedSummaryAndClassification(m.id, null, { category, reason }, user?.email); } catch(e){}
@@ -234,6 +256,7 @@ function App() {
       console.error('Failed to load emails:', err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -404,71 +427,140 @@ function App() {
       let clsData: any = null;
       let actData: any = null;
       try {
-        // Always fetch actions from LLM (not cached)
-        const promises = [];
-        if (needSummarize && needClassify) {
-          console.debug('handleSummarize: calling both summarize and classify');
-          promises.push(fetch(`${API_BASE}/llm/summarize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ message_id: email.id }) }));
-          promises.push(fetch(`${API_BASE}/llm/classify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ message_id: email.id }) }));
-        } else if (needSummarize) {
-          console.debug('handleSummarize: calling only summarize');
-          promises.push(fetch(`${API_BASE}/llm/summarize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ message_id: email.id }) }));
-        } else if (needClassify) {
-          console.debug('handleSummarize: calling only classify');
-          promises.push(fetch(`${API_BASE}/llm/classify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ message_id: email.id }) }));
-        } else {
-          console.debug('handleSummarize: using only cached data, no API calls needed for sum/cls');
+        // We'll attempt streaming endpoints for summarize and actions.
+        // Classify remains a normal JSON call.
+        let classifyPromise: Promise<Response> | null = null;
+        if (needClassify) {
+          console.debug('handleSummarize: calling classify JSON endpoint');
+          classifyPromise = fetch(`${API_BASE}/llm/classify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ message_id: email.id }) });
         }
-        // Fetch actions unless this message is already classified as spam
-        // Determine spam using the cached classification first (don't rely on async setState).
+
+        // Determine spam using cached classification first (don't rely on async setState).
         const clsCat = (cachedCls && cachedCls.category) || (classification && classification.category) || email.category || '';
         const isSpam = typeof clsCat === 'string' && clsCat.toLowerCase().includes('spam');
         console.log('handleSummarize: isSpam=', isSpam);
+
+        // Summarize: try streaming endpoint first if needed
+        if (needSummarize) {
+          try {
+            console.debug('handleSummarize: calling summarize-stream');
+            const streamRes = await fetch(`${API_BASE}/llm/summarize-stream`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ message_id: email.id }) });
+            if (streamRes.status === 429) {
+              const msg = 'Getting too many requests — please try again later.';
+              setSummary({ error: msg } as SummaryResult);
+              setRateLimitMessage(msg);
+              setSummarizing(false);
+              setClassifying(false);
+              return;
+            }
+            if (streamRes.ok && streamRes.body) {
+              const reader = streamRes.body.getReader();
+              const decoder = new TextDecoder();
+              let acc = '';
+              let done = false;
+              while (!done) {
+                // eslint-disable-next-line no-await-in-loop
+                const { value, done: readDone } = await reader.read();
+                done = !!readDone;
+                if (value) {
+                  acc += decoder.decode(value, { stream: true });
+                }
+              }
+              // store accumulated text as llm_text and attempt to parse JSON
+              sumData = { llm_text: acc, parsed: tryParseJson(acc) || undefined } as any;
+            } else {
+              console.debug('handleSummarize: summarize-stream not available, falling back to JSON');
+              const r = await fetch(`${API_BASE}/llm/summarize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ message_id: email.id }) });
+              sumRes = r;
+            }
+          } catch (e) {
+            console.error('handleSummarize: summarize-stream error', e);
+            // try JSON fallback
+            try { sumRes = await fetch(`${API_BASE}/llm/summarize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ message_id: email.id }) }); } catch (ex) { console.error('summarize fallback failed', ex); }
+          }
+        }
+
+        // Actions: call streaming endpoint if not spam
         if (!isSpam) {
-          console.debug('handleSummarize: calling actions (non-spam)');
-          promises.push(fetch(`${API_BASE}/llm/actions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ message_id: email.id }) }));
+          try {
+            console.debug('handleSummarize: calling actions-stream');
+            const streamRes = await fetch(`${API_BASE}/llm/actions-stream`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ message_id: email.id }) });
+            if (streamRes.status === 429) {
+              // Don't error out completely, just skip actions
+              console.debug('handleSummarize: actions-stream rate limited, skipping actions');
+            } else if (streamRes.ok && streamRes.body) {
+              const reader = streamRes.body.getReader();
+              const decoder = new TextDecoder();
+              let acc = '';
+              let done = false;
+              while (!done) {
+                // eslint-disable-next-line no-await-in-loop
+                const { value, done: readDone } = await reader.read();
+                done = !!readDone;
+                if (value) acc += decoder.decode(value, { stream: true });
+              }
+              actData = { llm_text: acc } as any;
+              try { actData.parsed = tryParseJson(acc); } catch (e) { actData.parsed = null; }
+            } else {
+              console.debug('handleSummarize: actions-stream not available, falling back to JSON');
+              actRes = await fetch(`${API_BASE}/llm/actions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ message_id: email.id }) });
+            }
+          } catch (e) {
+            console.error('handleSummarize: actions-stream error', e);
+            try { actRes = await fetch(`${API_BASE}/llm/actions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ message_id: email.id }) }); } catch (ex) { console.error('actions fallback failed', ex); }
+          }
         } else {
           console.debug('handleSummarize: skipping actions call for spam message');
         }
-        const results = await Promise.all(promises);
-        if (needSummarize && needClassify) {
-          sumRes = results[0];
-          clsRes = results[1];
-          actRes = results[2];
-        } else if (needSummarize) {
-          sumRes = results[0];
-          actRes = results[1];
-        } else if (needClassify) {
-          clsRes = results[0];
-          actRes = results[1];
-        } else {
-          actRes = results[0];
+
+        // Wait for classification JSON if requested
+        if (classifyPromise) {
+          try { clsRes = await classifyPromise; } catch (e) { console.error('classify failed', e); }
+        }
+
+        // If we received JSON sumRes (fallback), parse it
+        if (!sumData && sumRes) {
+          try { sumData = await sumRes.json(); } catch (e) { console.debug('failed parse sumRes json', e); }
+        }
+        // If we received JSON actRes (fallback), parse it
+        if (!actData && actRes) {
+          try { actData = await actRes.json(); } catch (e) { console.debug('failed parse actRes json', e); }
         }
       } catch (e) {
         console.error('handleSummarize: LLM fetch error', e);
       }
 
-      console.debug('handleSummarize: summarize status=', sumRes ? sumRes.status : 'no-call', ' classify status=', clsRes ? clsRes.status : 'no-call', ' actions status=', actRes ? actRes.status : 'no-call');
+      console.debug('handleSummarize: summarize status=', sumRes ? sumRes.status : (sumData ? 'streamed' : 'no-call'), ' classify status=', clsRes ? clsRes.status : 'no-call', ' actions status=', actRes ? actRes.status : (actData ? 'streamed' : 'no-call'));
+      // Check for rate limit on any endpoint
+      if ((sumRes && sumRes.status === 429) || (clsRes && clsRes.status === 429) || (actRes && actRes.status === 429)) {
+        const msg = 'Getting too many requests — please try again later.';
+        setSummary({ error: msg } as SummaryResult);
+        setRateLimitMessage(msg);
+        setSummarizing(false);
+        setClassifying(false);
+        return;
+      }
+      
       if (sumRes) {
-        if (sumRes.status === 429) {
-          const msg = 'Getting too many requests — please try again later.';
-          setSummary({ error: msg } as SummaryResult);
-          setRateLimitMessage(msg);
-          setSummarizing(false);
-          setClassifying(false);
-          return;
-        } else {
-          try { 
-            sumData = await sumRes.json();
-            console.debug('handleSummarize: summarize response=', sumData);
-            console.debug('handleSummarize: sumData.parsed=', sumData?.parsed);
-            console.debug('handleSummarize: sumData.parsed.summary=', sumData?.parsed?.summary);
-          } catch(e) { 
-            console.debug('handleSummarize: summarize parse error', e);
+        try { 
+          sumData = await sumRes.json();
+          // Handle rate limit in response body
+          if (sumData && sumData.error === 'rate_limit') {
+            const msg = 'Getting too many requests — please try again later.';
+            setSummary({ error: msg } as SummaryResult);
+            setRateLimitMessage(msg);
+            setSummarizing(false);
+            setClassifying(false);
+            return;
           }
+          console.debug('handleSummarize: summarize response=', sumData);
+          console.debug('handleSummarize: sumData.parsed=', sumData?.parsed);
+          console.debug('handleSummarize: sumData.parsed.summary=', sumData?.parsed?.summary);
+        } catch(e) { 
+          console.debug('handleSummarize: summarize parse error', e);
         }
-      } else {
-        // reuse cached summary when summarize not called
+      } else if (!sumData) {
+        // reuse cached summary when summarize not called and streaming didn't fill it
         sumData = cached || null;
         console.debug('handleSummarize: using cached summary=', sumData);
       }
@@ -492,7 +584,17 @@ function App() {
         console.debug('handleSummarize: using cached classification=', clsData);
       }
       if (actRes) {
-        try { actData = await actRes.json(); console.debug('handleSummarize: actions response=', actData); } catch(e) { console.debug('handleSummarize: actions parse error', e); }
+        try { 
+          actData = await actRes.json(); 
+          console.debug('handleSummarize: actions response=', actData);
+          // Handle rate limit in actions response
+          if (actData && actData.error === 'rate_limit') {
+            actData = null; // Will trigger fallback actions
+          }
+        } catch(e) { 
+          console.debug('handleSummarize: actions parse error', e);
+          actData = null;
+        }
       } else {
         // If we skipped calling actions because the mail is spam, provide a local recommended action
         const clsCat2 = (cachedCls && cachedCls.category) || (classification && classification.category) || email.category || '';
@@ -513,6 +615,30 @@ function App() {
           console.debug('handleSummarize: merged actions into summary=', sumData);
         }
       }
+      // Normalize actions shape: ensure parsed.actions is an array of action objects
+      try {
+        if (sumData && sumData.parsed) {
+          const a: any = sumData.parsed.actions;
+          if (a && typeof a === 'string') {
+            // sometimes LLM returns a JSON string or a plain-text list
+            try {
+              const parsedActions = JSON.parse(a);
+              if (Array.isArray(parsedActions)) sumData.parsed.actions = parsedActions;
+              else if (typeof parsedActions === 'object') sumData.parsed.actions = [parsedActions];
+            } catch (e) {
+              // try to split lines into tasks
+              const lines = (a as string).split(/\r?\n/).map((l: string) => l.trim()).filter(Boolean);
+              if (lines.length > 0) sumData.parsed.actions = lines.map((l: string) => ({ task: l }));
+            }
+          } else if (a && typeof a === 'object' && !Array.isArray(a)) {
+            // single object -> wrap into array
+            sumData.parsed.actions = [a];
+          }
+          // if still missing or empty, leave it — UI will derive fallback actions
+        }
+      } catch (e) {
+        console.debug('handleSummarize: action normalization failed', e);
+      }
       // If the message is spam, override any actions with the single local spam action to avoid backend suggestions
       const finalClsCat = (cachedCls && cachedCls.category) || (classification && classification.category) || email.category || '';
       const finalIsSpam = typeof finalClsCat === 'string' && finalClsCat.toLowerCase().includes('spam');
@@ -527,8 +653,23 @@ function App() {
       try {
         if (sumData && (!sumData.parsed || !sumData.parsed.summary)) {
           const attempted = tryParseJson(sumData && sumData.llm_text);
-          if (attempted && attempted.summary) {
-            sumData.parsed = { ...((sumData.parsed) || {}), ...attempted };
+          if (attempted && typeof attempted === 'object') {
+            // If LLM returned JSON, extract summary from it
+            if (attempted.summary && typeof attempted.summary === 'string') {
+              // Summary is directly in the parsed object
+              sumData.parsed = { ...((sumData.parsed) || {}), ...attempted };
+            } else {
+              // Look for any string field that looks like a summary
+              const summaryField = Object.keys(attempted).find(key => 
+                typeof attempted[key] === 'string' && attempted[key].length > 20
+              );
+              if (summaryField) {
+                sumData.parsed = { ...((sumData.parsed) || {}), summary: attempted[summaryField], ...attempted };
+              } else {
+                // No good summary field found, use fallback
+                sumData.parsed = { ...((sumData.parsed) || {}), summary: "Summary processed - check actions below." };
+              }
+            }
           } else if (sumData && typeof sumData.llm_text === 'string' && sumData.llm_text.trim().length > 0) {
             // take first paragraph or 200 chars as a fallback summary
             const txt = sumData.llm_text.trim();
@@ -558,6 +699,10 @@ function App() {
       } catch (e) {
         console.debug('handleSummarize: classification normalization failed', e);
       }
+      // normalize the returned category to UI canonical form
+      try {
+        if (parsedCls && parsedCls.category) parsedCls.category = normalizeCategory(parsedCls.category);
+      } catch (e) { /* ignore */ }
       console.debug('handleSummarize: setting classification to', parsedCls);
       setClassification(parsedCls);
       // cache the summary and classification in localStorage and in the inbox list to avoid repeat LLM calls
@@ -566,7 +711,8 @@ function App() {
       // If the (full) classification differs, update the inbox list so both views match
       try {
         if (parsedCls && parsedCls.category) {
-          setEmails(prev => prev.map(e => e.id === email.id ? { ...e, category: parsedCls.category, category_reason: parsedCls.reason || e.category_reason } : e));
+          const normalized = normalizeCategory(parsedCls.category);
+          setEmails(prev => prev.map(e => e.id === email.id ? { ...e, category: normalized, category_reason: parsedCls.reason || e.category_reason } : e));
         }
       } catch (e) {
         console.warn('Failed to update email list category', e);
@@ -588,20 +734,82 @@ function App() {
     setChatMessages((s) => [...s, { role: 'user', text: q }]);
     setQuestion('');
     try {
+      // Try streaming endpoint first
+      const streamRes = await fetch(`${API_BASE}/llm/ask-stream`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ message_id: selectedEmail.id, question: q })
+      });
+      
+      if (streamRes.status === 429) {
+        setChatMessages((s) => [...s, { role: 'assistant', text: 'Rate limit exceeded. Please try again later.' }]);
+        return;
+      }
+      
+      if (streamRes.ok && streamRes.body) {
+        // Append an empty assistant message which we'll update as chunks arrive
+        setChatMessages((s) => [...s, { role: 'assistant', text: '' }]);
+        const reader = streamRes.body.getReader();
+        const decoder = new TextDecoder();
+        let done = false;
+        let accumulated = '';
+        while (!done) {
+          // eslint-disable-next-line no-await-in-loop
+          const { value, done: readDone } = await reader.read();
+          done = !!readDone;
+          if (value) {
+            const chunk = decoder.decode(value, { stream: true });
+            accumulated += chunk;
+            // Update last assistant message
+            setChatMessages(prev => {
+              const copy = [...prev];
+              // find last assistant message index
+              let idx = -1;
+              for (let i = copy.length - 1; i >= 0; i--) if (copy[i].role === 'assistant') { idx = i; break; }
+              if (idx >= 0) copy[idx] = { ...copy[idx], text: accumulated };
+              return copy;
+            });
+          }
+        }
+        // streaming complete
+        return;
+      }
+      
+      // If streaming not supported, fall back to JSON endpoint
       const res = await fetch(`${API_BASE}/llm/ask`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
         body: JSON.stringify({ message_id: selectedEmail.id, question: q })
       });
+      
+      // Handle rate limit
+      if (res.status === 429) {
+        setChatMessages((s) => [...s, { role: 'assistant', text: 'Rate limit exceeded. Please try again later.' }]);
+        return;
+      }
+      
       const data = await res.json();
+      
+      // Handle rate limit in response body
+      if (data && data.error === 'rate_limit') {
+        setChatMessages((s) => [...s, { role: 'assistant', text: 'Rate limit exceeded. Please try again later.' }]);
+        return;
+      }
+      
       // prefer parsed answer if available, else llm_text
       let reply = '';
       if (data.parsed) {
-        // if parsed contains draft, show a message and set draftPreview
         if (data.parsed.draft && data.parsed.draft.subject && data.parsed.draft.body) {
           setDraftPreview({ subject: data.parsed.draft.subject, body: data.parsed.draft.body });
           reply = 'Draft generated. Review and save below.';
+        } else if (data.parsed.raw && typeof data.parsed.raw === 'string') {
+          reply = data.parsed.raw;
+        } else if (data.parsed.summary) {
+          reply = data.parsed.summary;
+        } else if (data.parsed.answer) {
+          reply = data.parsed.answer;
+        } else if (data.parsed.actions && Array.isArray(data.parsed.actions)) {
+          reply = data.parsed.actions.map((a: any) => a.task || JSON.stringify(a)).join('\n');
         } else {
-          reply = JSON.stringify(data.parsed);
+          try { reply = JSON.stringify(data.parsed, null, 2); } catch (e) { reply = String(data.parsed); }
         }
       } else if (data.answer) {
         reply = data.answer;
@@ -688,6 +896,51 @@ function App() {
     }
   };
 
+  // Prepare actions to display in the UI: coerce LLM output into array, or derive heuristics
+  const getActionsToShow = () => {
+    try {
+      if (!selectedEmail) return { actions: [], message: null };
+      const raw: any = summary && summary.parsed;
+      if (raw) {
+        const actions = raw.actions;
+        const message = raw.message;
+        if (actions) {
+          if (Array.isArray(actions)) return { actions: actions as Array<any>, message };
+          if (typeof actions === 'string') {
+            try {
+              const parsed = JSON.parse(actions);
+              if (Array.isArray(parsed)) return { actions: parsed, message };
+              if (typeof parsed === 'object') return { actions: [parsed], message };
+            } catch (e) {
+              const lines = (actions as string).split(/\r?\n/).map((l: string) => l.trim()).filter(Boolean);
+              if (lines.length > 0) return { actions: lines.map((l: string) => ({ task: l })), message };
+            }
+          }
+          if (typeof actions === 'object') return { actions: [actions], message };
+        }
+        // If we have a message but no actions, return it
+        if (message && (!actions || (Array.isArray(actions) && actions.length === 0))) {
+          return { actions: [], message };
+        }
+        
+        // Check if actions are in the LLM text but not parsed correctly
+        if (summary && summary.llm_text && typeof summary.llm_text === 'string') {
+          // Look for action-like patterns in the raw LLM text
+          const actionKeywords = /(?:action[s]?|todo|task[s]?|should|need to|must|required|follow[- ]?up)/i;
+          if (actionKeywords.test(summary.llm_text)) {
+            console.debug('Actions keywords found in LLM text but no parsed actions');
+          }
+        }
+      }
+      // fallback: derive small heuristic actions from summary or message
+      const derived = deriveActions(selectedEmail, summary);
+      return { actions: derived || [], message: null };
+    } catch (e) {
+      console.error('getActionsToShow error:', e);
+      return { actions: [], message: null };
+    }
+  };
+
   if (!user) {
     return (
       <div className="app-root centered">
@@ -708,7 +961,14 @@ function App() {
         <div className="topbar">
           <h1 className="brand">Mail-Bot</h1>
           <div className="top-buttons">
-            <button className="btn" onClick={loadEmails} disabled={loading} title="Refresh">{loading ? 'Loading...' : 'Refresh Emails'}</button>
+            <button className="btn" onClick={loadEmails} disabled={loading || refreshing} title="Refresh">
+              {refreshing ? (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div className="spinner"></div>
+                  Refreshing...
+                </span>
+              ) : loading ? 'Loading...' : 'Refresh Emails'}
+            </button>
             <button className="btn" onClick={handleSettingsOpen} title="Settings">⚙ Settings</button>
             {user && user.picture && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -717,6 +977,8 @@ function App() {
               </div>
             )}
             <button className="btn" onClick={() => {
+              // Clear cache on logout
+              clearCache(user?.email);
               setUser(null);
               // Clear session on backend
               fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
@@ -747,7 +1009,7 @@ function App() {
             ) : (
               <div className="inbox-list">
                 {emails
-                  .filter(email => categoryFilter === 'All' || email.category === categoryFilter)
+                  .filter(email => categoryFilter === 'All' || normalizeCategory(email.category) === categoryFilter)
                   .map((email) => (
                   <div
                     key={email.id}
@@ -793,9 +1055,15 @@ function App() {
             {!selectedEmail ? (
               <p className="muted">Select an email to see AI summary</p>
             ) : summarizing ? (
-              <p>Analyzing email...</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className="spinner"></div>
+                <span>Analyzing email...</span>
+              </div>
             ) : classifying ? (
-              <p>Classifying email...</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className="spinner"></div>
+                <span>Classifying email...</span>
+              </div>
             ) : rateLimitMessage ? (
               <p className="error">{rateLimitMessage}</p>
             ) : summary?.error ? (
@@ -816,9 +1084,13 @@ function App() {
                     );
                   })()}
                 </div>
-                {summary.parsed?.summary && (
+                {summary.parsed?.summary ? (
                   <div className="section">
                     <p>{summary.parsed.summary}</p>
+                  </div>
+                ) : (
+                  <div className="section">
+                    <p className="muted">Summary processed - check actions below.</p>
                   </div>
                 )}
               </div>
@@ -830,18 +1102,28 @@ function App() {
             {selectedEmail && (
               <div className="card actions-card" style={{ marginTop: 8 }}>
                 <h3 className="card-title">Actions</h3>
-                {(summary && summary.parsed && summary.parsed.actions && summary.parsed.actions.length > 0) ? (
-                  <ul>
-                    {summary.parsed.actions.map((action, idx) => (
-                      <li key={idx}>
-                        <strong>{action.task}</strong>
-                        {action.deadline && <span> - Due: {action.deadline}</span>}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="muted">No actions available.</p>
-                )}
+                {summarizing ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div className="spinner"></div>
+                    <span>Analyzing actions...</span>
+                  </div>
+                ) : (() => {
+                  const actionResult = getActionsToShow();
+                  const actionsToShow = actionResult.actions;
+                  const actionMessage = actionResult.message;
+                  return actionsToShow && actionsToShow.length > 0 ? (
+                    <ul>
+                      {actionsToShow.map((action: any, idx: number) => (
+                        <li key={idx}>
+                          <strong>{action.task || action}</strong>
+                          {action.deadline && <span> - Due: {action.deadline}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="muted">{actionMessage || "No actions needed."}</p>
+                  );
+                })()}
               </div>
             )}
 

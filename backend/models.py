@@ -4,8 +4,16 @@ from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, B
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from cryptography.fernet import Fernet, InvalidToken
+from dotenv import load_dotenv
+
+# Load .env file
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://mailbot:mailbotpass@localhost:5432/mailbotdb")
+
+# Handle Render's DATABASE_URL format (postgres:// -> postgresql://)
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 FERNET_KEY = os.environ.get("FERNET_KEY")
 if not FERNET_KEY:
     raise RuntimeError("Set FERNET_KEY env var")
@@ -36,8 +44,6 @@ class UserPrompt(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
-def init_db():
-    Base.metadata.create_all(bind=engine)
 
 def encrypt_payload(payload: dict) -> str:
     raw = json.dumps(payload).encode("utf-8")

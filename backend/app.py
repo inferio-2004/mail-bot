@@ -1,4 +1,9 @@
 
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
 import os
 import json
 import datetime
@@ -7,14 +12,13 @@ from flask import Flask, request, redirect, session, jsonify
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from llm_gemini import GeminiLLM
-from models import save_user_token, get_user_token, refresh_access_token, init_db
+from models import save_user_token, get_user_token, refresh_access_token
 from routes.auth import auth_bp
 from routes.email import email_bp
 from routes.llm import llm_bp
 from routes.prompts import prompts_bp
 from llm_worker import llm_worker_run
-dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env")
+
 # Load environment
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
@@ -23,13 +27,23 @@ FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://127.0.0.1:3000")
 
 # Flask app
 app = Flask(__name__)
-# make cookies usable during local dev OAuth redirect
+# Production-ready secret key
 app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret-change-me")
-app.config.update(
-    SESSION_COOKIE_SAMESITE="Lax",   # allows top-level GET redirect cookies during OAuth
-    SESSION_COOKIE_SECURE=False,     # must be False for http://localhost (True requires https)
-    SESSION_COOKIE_DOMAIN=None       # let browser use default domain (localhost)
-)
+
+# Production CORS and session settings
+is_production = os.environ.get("RENDER") or os.environ.get("PRODUCTION")
+if is_production:
+    app.config.update(
+        SESSION_COOKIE_SAMESITE="None",  # Required for cross-origin in production
+        SESSION_COOKIE_SECURE=True,     # Required for https
+        SESSION_COOKIE_DOMAIN=None
+    )
+else:
+    app.config.update(
+        SESSION_COOKIE_SAMESITE="Lax",   # allows top-level GET redirect cookies during OAuth
+        SESSION_COOKIE_SECURE=False,     # must be False for http://localhost (True requires https)
+        SESSION_COOKIE_DOMAIN=None       # let browser use default domain (localhost)
+    )
 CORS(app, origins=FRONTEND_ORIGIN, supports_credentials=True)
 # Make Flask sessions persistent across browser restarts for development
 import datetime as _dt
@@ -42,11 +56,8 @@ limiter = Limiter(
     default_limits=["60 per minute"]
 )
 
-# Initialize DB (creates tables)
-init_db()
 
-# Initialize LLM and attach to app.config (LangChain wrapper)
-app.config["LLM"] = GeminiLLM(model_name=os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite"))
+app.config["LLM_STREAMING"] = True  # Groq streaming enabled
 
 # Register blueprints
 app.register_blueprint(auth_bp)
